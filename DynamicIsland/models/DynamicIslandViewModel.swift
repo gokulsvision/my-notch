@@ -175,6 +175,7 @@ class DynamicIslandViewModel: NSObject, ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self else { return }
+                guard self.coordinator.currentView != .browser else { return }
                 let updatedTarget = self.calculateDynamicNotchSize()
                 guard self.notchState == .open else { return }
                 guard self.notchSize != updatedTarget else { return }
@@ -230,6 +231,7 @@ class DynamicIslandViewModel: NSObject, ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self else { return }
+                guard self.coordinator.currentView != .browser else { return }
                 guard self.notchState == .open else { return }
                 let updatedTarget = self.calculateDynamicNotchSize()
                 guard self.notchSize != updatedTarget else { return }
@@ -312,6 +314,7 @@ class DynamicIslandViewModel: NSObject, ObservableObject {
 
     private func updateSideLyricsNotchSizeIfNeeded() {
         guard notchState == .open, !Defaults[.enableMinimalisticUI] else { return }
+        guard coordinator.currentView != .browser else { return }
 
         let updatedTarget = calculateDynamicNotchSize()
         guard notchSize != updatedTarget else { return }
@@ -417,7 +420,35 @@ class DynamicIslandViewModel: NSObject, ObservableObject {
         MusicManager.shared.forceUpdate()
         focusClipboardTabIfNeeded()
     }
-    
+
+    /// Live-resizes the open notch while the browser's bottom bezel is being
+    /// dragged. Keeps width, only animates height.
+    func applyBrowserHeight(_ height: CGFloat) {
+        guard notchState == .open, coordinator.currentView == .browser else { return }
+        let baseSize = Defaults[.enableMinimalisticUI]
+            ? minimalisticOpenNotchSize(isDynamicIslandMode: shouldUseDynamicIslandMode(for: screen))
+            : openNotchSize
+        let targetSize = CGSize(width: baseSize.width, height: max(baseSize.height, height))
+        if let delegate = AppDelegate.shared {
+            delegate.ensureWindowSize(
+                addShadowPadding(to: targetSize, isMinimalistic: Defaults[.enableMinimalisticUI]),
+                animated: false,
+                force: true
+            )
+        }
+        notchSize = targetSize
+    }
+
+    /// Re-arms the browser auto-close countdown after the user unpins while
+    /// the cursor is away from the notch. Delegates to ContentView's timer
+    /// via a notification so there is exactly one owner of the close task.
+    func scheduleBrowserAutoCloseAfterUnpin() {
+        NotificationCenter.default.post(
+            name: .browserAutoCloseRearmRequested,
+            object: nil
+        )
+    }
+
     private func calculateDynamicNotchSize() -> CGSize {
         let baseSize = Defaults[.enableMinimalisticUI] ? minimalisticOpenNotchSize(isDynamicIslandMode: shouldUseDynamicIslandMode(for: screen)) : openNotchSize
         var adjustedSize = baseSize
@@ -425,6 +456,14 @@ class DynamicIslandViewModel: NSObject, ObservableObject {
         if coordinator.currentView == .notes || coordinator.currentView == .clipboard {
             let preferred = coordinator.notesLayoutState.preferredHeight
             adjustedSize.height = max(adjustedSize.height, preferred)
+            return adjustedSize
+        }
+
+        if coordinator.currentView == .browser {
+            // Mirror ContentView's browser height (bezel drag or S/M/L/XL
+            // preset) so the window resize matches the rendered content.
+            let browserHeight = WebTabsModelHolder.shared.model.customHeight ?? Defaults[.browserPanelSize].height
+            adjustedSize.height = max(adjustedSize.height, browserHeight)
             return adjustedSize
         }
 

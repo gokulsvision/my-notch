@@ -1313,6 +1313,21 @@ extension Defaults.Keys {
     static let terminalForegroundColor = Key<Color>("terminalForegroundColor", default: .white)
     static let terminalCursorColor = Key<Color>("terminalCursorColor", default: Color(.selectedControlColor))
     static let terminalStickyMode = Key<Bool>("terminalStickyMode", default: false)
+
+    // MARK: Browser Feature
+    static let enableBrowserFeature = Key<Bool>("enableBrowserFeature", default: false)
+    static let browserSearchEngine = Key<BrowserSearchEngine>("browserSearchEngine", default: .duckDuckGo)
+    /// Height of the open notch while the Browser tab is active. Small keeps
+    /// the notch compact; Large/XL give a usable viewport for X timelines or
+    /// YouTube's player. XL is the default so the browser is usable out of
+    /// the box; users shrink it for quick lookups.
+    static let browserPanelSize = Key<BrowserSizePreset>("browserSizePreset", default: .extraLarge)
+    /// Seconds the notch stays open after the pointer leaves while the
+    /// Browser tab is active. Zero closes with the standard quick hover-out.
+    static let browserAutoCloseDelay = Key<Double>("browserAutoCloseDelay", default: 5)
+    /// Forces dark rendering on every site: the web view's appearance is
+    /// pinned to darkAqua so `prefers-color-scheme: dark` always matches.
+    static let browserForceDarkMode = Key<Bool>("browserForceDarkMode", default: true)
     
     // MARK: Timer Feature
     static let enableTimerFeature = Key<Bool>("enableTimerFeature", default: true)

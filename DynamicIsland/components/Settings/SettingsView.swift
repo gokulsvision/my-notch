@@ -66,6 +66,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
     case shortcuts
     case notes
     case terminal
+    case browser
     case about
 
     var id: String { rawValue }
@@ -79,7 +80,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .timer, .calendar, .notes:                                      return .productivity
         case .clipboard, .screenAssistant, .colorPicker, .shelf,
              .downloads, .shortcuts:                                         return .utilities
-        case .stats, .terminal:                                              return .developer
+        case .stats, .terminal, .browser:                                    return .developer
         case .extensions:                                                    return .integrations
         case .about:                                                         return .info
         }
@@ -107,6 +108,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .shortcuts: return String(localized: "Shortcuts")
         case .notes: return String(localized: "Notes")
         case .terminal: return String(localized: "Terminal")
+        case .browser: return String(localized: "Browser")
         case .about: return String(localized: "About")
         }
     }
@@ -133,6 +135,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .shortcuts: return "keyboard"
         case .notes: return "note.text"
         case .terminal: return "apple.terminal"
+        case .browser: return "globe"
         case .about: return "info.circle"
         }
     }
@@ -159,6 +162,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .shortcuts: return .orange
         case .notes: return Color(red: 0.979, green: 0.716, blue: 0.153, opacity: 1.000)
         case .terminal: return Color(red: 0.2, green: 0.8, blue: 0.4)
+        case .browser: return .cyan
         case .about: return .secondary
         }
     }
@@ -476,6 +480,11 @@ private enum SettingsSearchIndex {
         SettingsSearchEntry(tab: .terminal, title: "Background color", keywords: ["terminal", "background", "color", "theme"], highlightID: SettingsTab.terminal.highlightID(for: "Background color")),
         SettingsSearchEntry(tab: .terminal, title: "Foreground color", keywords: ["terminal", "foreground", "text color", "theme"], highlightID: SettingsTab.terminal.highlightID(for: "Foreground color")),
         SettingsSearchEntry(tab: .terminal, title: "Cursor color", keywords: ["terminal", "cursor", "caret", "color"], highlightID: SettingsTab.terminal.highlightID(for: "Cursor color")),
+        SettingsSearchEntry(tab: .browser, title: "Enable browser", keywords: ["browser", "webkit", "web", "tab"], highlightID: SettingsTab.browser.highlightID(for: "Enable browser")),
+        SettingsSearchEntry(tab: .browser, title: "Search engine", keywords: ["browser", "search", "engine", "duckduckgo", "google"], highlightID: SettingsTab.browser.highlightID(for: "Search engine")),
+        SettingsSearchEntry(tab: .browser, title: "Notch size", keywords: ["browser", "size", "height", "notch", "video", "youtube"], highlightID: SettingsTab.browser.highlightID(for: "Notch size")),
+        SettingsSearchEntry(tab: .browser, title: "Close after pointer leaves", keywords: ["browser", "auto", "close", "delay", "collapse", "hover"], highlightID: SettingsTab.browser.highlightID(for: "Close after pointer leaves")),
+        SettingsSearchEntry(tab: .browser, title: "Always use dark mode", keywords: ["browser", "dark", "mode", "theme", "night", "force"], highlightID: SettingsTab.browser.highlightID(for: "Always use dark mode")),
         SettingsSearchEntry(tab: .terminal, title: "Bold as bright", keywords: ["terminal", "bold", "bright", "colors"], highlightID: SettingsTab.terminal.highlightID(for: "Bold as bright")),
         SettingsSearchEntry(tab: .terminal, title: "Cursor style", keywords: ["terminal", "cursor", "block", "underline", "bar", "blink"], highlightID: SettingsTab.terminal.highlightID(for: "Cursor style")),
         SettingsSearchEntry(tab: .terminal, title: "Scrollback lines", keywords: ["terminal", "scrollback", "buffer", "history"], highlightID: SettingsTab.terminal.highlightID(for: "Scrollback lines")),
@@ -820,6 +829,7 @@ struct SettingsView: View {
             // Developer
             .stats,
             .terminal,
+            .browser,
             // Integrations
             .extensions,
             // Info
@@ -1101,6 +1111,10 @@ struct SettingsView: View {
         case .terminal:
             SettingsForm(tab: .terminal) {
                 TerminalSettings()
+            }
+        case .browser:
+            SettingsForm(tab: .browser) {
+                BrowserSettings()
             }
         case .about:
             if let controller = updaterController {
@@ -9661,6 +9675,81 @@ private struct QuickShareProviderIconImage: View {
             }
         }
         .frame(width: size, height: size)
+    }
+}
+
+struct BrowserSettings: View {
+    @Default(.enableBrowserFeature) var enableBrowserFeature
+    @Default(.browserSearchEngine) var browserSearchEngine
+    @Default(.browserPanelSize) var browserPanelSize
+    @Default(.browserAutoCloseDelay) var browserAutoCloseDelay
+
+    /// "Never" is stored as −1; the auto-close scheduler treats ≤ 0 as off.
+    private var browserSize: Binding<BrowserSizePreset> {
+        Binding(get: { browserPanelSize }, set: { browserPanelSize = $0 })
+    }
+
+    private var autoCloseDelay: Binding<Double> {
+        Binding(
+            get: { browserAutoCloseDelay },
+            set: { browserAutoCloseDelay = $0 }
+        )
+    }
+
+    private func highlightID(_ title: String) -> String {
+        SettingsTab.browser.highlightID(for: title)
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Defaults.Toggle(key: .enableBrowserFeature) {
+                    Text("Enable browser")
+                }
+                .settingsHighlight(id: highlightID("Enable browser"))
+
+                if enableBrowserFeature {
+                    Picker("Search engine", selection: $browserSearchEngine) {
+                        ForEach(BrowserSearchEngine.allCases) { engine in
+                            Text(engine.name).tag(engine)
+                        }
+                    }
+                    .settingsHighlight(id: highlightID("Search engine"))
+
+                    Picker("Notch size", selection: browserSize) {
+                        ForEach(BrowserSizePreset.allCases) { preset in
+                            Text(preset.localizedName).tag(preset)
+                        }
+                    }
+                    .settingsHighlight(id: highlightID("Notch size"))
+
+                    Picker("Close after pointer leaves", selection: autoCloseDelay) {
+                        Text("Immediately").tag(0.0)
+                        Text("5 seconds").tag(5.0)
+                        Text("15 seconds").tag(15.0)
+                        Text("30 seconds").tag(30.0)
+                        Text("Never").tag(-1.0)
+                    }
+                    .settingsHighlight(id: highlightID("Close after pointer leaves"))
+
+                    Defaults.Toggle(key: .browserForceDarkMode) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Always use dark mode")
+                            Text("Renders every website dark, even sites without their own dark theme.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .settingsHighlight(id: highlightID("Always use dark mode"))
+                }
+            } header: {
+                Text("General")
+            } footer: {
+                Text("Adds a WebKit mini-browser tab to the notch. Browser tabs stay alive across notch open/close cycles.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }
 

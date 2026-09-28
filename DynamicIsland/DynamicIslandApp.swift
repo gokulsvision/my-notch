@@ -425,12 +425,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.animationBehavior = .none
         // collectionBehavior is configured in DynamicIslandWindow.init
 
-        window.contentView = FirstMouseHostingView(
+        let hostingView = FirstMouseHostingView(
             rootView: ContentView()
                 .environmentObject(viewModel)
                 .environmentObject(webcamManager)
                 //.moveToSky()
         )
+        // Track the window frame: without this the hosting view keeps the
+        // size it was created with, so a live resize (browser bezel drag)
+        // grows the window but leaves the SwiftUI content at the old height —
+        // the bottom of the window renders black and swallows no events.
+        hostingView.autoresizingMask = [.width, .height]
+        window.contentView = hostingView
         
         window.orderFrontRegardless()
         NotchSpaceManager.shared.notchSpace.windows.insert(window)
@@ -577,6 +583,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let screenHeight = NSScreen.main?.visibleFrame.height ?? 800
             let maxFraction = Defaults[.terminalMaxHeightFraction]
             baseSize.height = min(screenHeight * maxFraction, max(300, screenHeight * maxFraction))
+        } else if coordinator.currentView == .browser {
+            let browserHeight = WebTabsModelHolder.shared.model.customHeight ?? Defaults[.browserPanelSize].height
+            baseSize.height = max(baseSize.height, browserHeight)
         }
         
         baseSize = inlineLyricsAdjustedNotchSize(
@@ -806,12 +815,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }.store(in: &cancellables)
 
+        // Browser tab: keep exactly ONE size while browsing. Live web content
+        // (page load states, scrollbar layout, marquee text) perturbs SwiftUI
+        // intrinsic sizes, which would otherwise re-fire the generic resize
+        // publishers below and cause constant jitter. While the browser tab
+        // is open, only bezel drags and preset changes may move the window.
+        WebTabsModelHolder.shared.model.$customHeight
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                guard self.coordinator.currentView == .browser else { return }
+                self.updateWindowSizeForTabSwitch()
+            }
+            .store(in: &cancellables)
+
+        Defaults.publisher(.browserPanelSize, options: []).sink { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.updateWindowSizeForTabSwitch()
+            }
+        }.store(in: &cancellables)
+
         networkConnectivityManager.$hudState
             .removeDuplicates()
             .sink { [weak self] _ in
                 // @Published emits before assigning the new state, so calculate
                 // the target dimensions on the next main-run-loop turn.
                 DispatchQueue.main.async {
+                    guard self?.coordinator.currentView != .browser else { return }
                     self?.updateWindowSizeIfNeeded()
                 }
             }
@@ -832,6 +863,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         coordinator.$notesLayoutState
             .removeDuplicates()
             .sink { [weak self] _ in
+                guard self?.coordinator.currentView != .browser else { return }
                 self?.updateWindowSizeIfNeeded()
             }
             .store(in: &cancellables)
@@ -879,6 +911,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         ReminderLiveActivityManager.shared.$activeWindowReminders
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
+                guard self?.coordinator.currentView != .browser else { return }
                 self?.debouncedUpdateWindowSize()
             }
             .store(in: &cancellables)
@@ -887,6 +920,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .combineLatest(TimerManager.shared.$isTimerActive)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
+                guard self?.coordinator.currentView != .browser else { return }
                 self?.debouncedUpdateWindowSize()
             }
             .store(in: &cancellables)
@@ -1072,7 +1106,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: workItem)
             case .open:
-                viewModel.close()
+                // Pinned browser tabs are exempt from the toggle shortcut's
+                // close; the pin is an explicit user promise to keep the
+                // panel up. Unpinning restores normal toggle behavior.
+                if viewModel.notchState == .open,
+                   coordinator.currentView == .browser,
+                   WebTabsModelHolder.shared.model.isPinned {
+                    closeNotchWorkItem?.cancel()
+                    closeNotchWorkItem = nil
+                } else {
+                    viewModel.close()
+                }
             }
         }
 
@@ -1704,6 +1748,7 @@ extension Notification.Name {
     static let notchHeightChanged = Notification.Name("NotchHeightChanged")
     static let showOnAllDisplaysChanged = Notification.Name("showOnAllDisplaysChanged")
     static let automaticallySwitchDisplayChanged = Notification.Name("automaticallySwitchDisplayChanged")
+    static let browserAutoCloseRearmRequested = Notification.Name("BrowserAutoCloseRearmRequested")
 }
 
 extension CGRect: @retroactive Hashable {
