@@ -1,0 +1,94 @@
+name: Sync upstream Atoll
+
+# Checks Ebullioscopic/Atoll daily. When the upstream dev branch has new
+# commits, this workflow merges them into this repo's `dev` branch and opens
+# a PR so the merge can be reviewed by hand before it lands. If the merge is
+# conflict-free, the PR still appears — merging it is always manual.
+
+on:
+  schedule:
+    # Daily at 09:00 UTC.
+    - cron: "0 9 * * *"
+  workflow_dispatch: # also runnable by hand from the Actions tab
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0 # full history so merges see the upstream base
+
+      - name: Add upstream remote and fetch
+        run: |
+          git remote add upstream https://github.com/Ebullioscopic/Atoll.git
+          git fetch upstream dev
+
+      - name: Detect new upstream commits
+        id: detect
+        run: |
+          COUNT=$(git rev-list --count dev..upstream/dev)
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Upstream is $COUNT commit(s) ahead of dev"
+          if [ "$COUNT" -gt 0 ]; then
+            LATEST=$(git log -1 --format='%h %s' upstream/dev)
+            echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if nothing new
+        if: steps.detect.outputs.count == 0
+        run: echo "Upstream unchanged; nothing to do."
+
+      - name: Configure git author
+        if: steps.detect.outputs.count != 0
+        run: |
+          git config user.name "my-notch-sync[bot]"
+          git config user.email "sync@my-notch.local"
+
+      - name: Create sync branch and merge upstream
+        if: steps.detect.outputs.count != 0
+        run: |
+          BRANCH="sync/upstream-$(date +%Y%m%d)"
+          git checkout -b "$BRANCH"
+          # Merge upstream; on conflict, stage both sides' markers and let
+          # the PR show them so the human resolves in their checkout.
+          if ! git merge upstream/dev --no-edit -m "Merge upstream Atoll $(date +%Y-%m-%d)" --no-commit; then
+            echo "MERGE_CONFLICT=true" >> "$GITHUB_ENV"
+            git diff --name-only --diff-filter=U
+          else
+            git commit -m "Merge upstream Atoll $(date +%Y-%m-%d)
+
+            Upstream head: ${{ steps.detect.outputs.latest }}
+
+            Co-authored-by: factory-droid[bot] <138933559+factory-droid[bot]@users.noreply.github.com>"
+          fi
+          echo "SYNC_BRANCH=$BRANCH" >> "$GITHUB_ENV"
+          git push origin "$BRANCH"
+
+      - name: Open PR for manual merge
+        if: steps.detect.outputs.count != 0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ env.SYNC_BRANCH }}"
+          CONFLICT_NOTE=""
+          if [ "${{ env.MERGE_CONFLICT }}" = "true" ]; then
+            CONFLICT_NOTE="⚠️ **This merge has conflicts.** The sync branch above contains the conflict markers committed as-is. Check out \`${BRANCH}\` locally, resolve, commit, and push back — the PR updates automatically."
+          else
+            CONFLICT_NOTE="The merge committed cleanly. Review the diff, then merge when satisfied."
+          fi
+          gh pr create \
+            --base dev \
+            --head "$BRANCH" \
+            --title "Sync upstream Atoll ($(date +%Y-%m-%d))" \
+            --body "Automatic upstream sync. Upstream is **${{ steps.detect.outputs.count }}** commit(s) ahead; latest: \`${{ steps.detect.outputs.latest }}\`.
+
+          ${CONFLICT_NOTE}
+
+          _Nothing lands in \`dev\` until this PR is merged by hand._"
