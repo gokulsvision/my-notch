@@ -132,7 +132,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // Debouncing mechanism for window size updates
     private var windowSizeUpdateWorkItem: DispatchWorkItem?
 
-    // Block-based AudioTap observers, kept with their center so they can be removed by token
+    /// Permanently-installed global click monitor that dismisses the notch
+    /// when the user clicks outside it while the Browser tab is open
+    /// (Cinema Mode survives). Evaluated at click time, so it needs no
+    /// install/uninstall churn tied to SwiftUI view lifecycles — that churn
+    /// is exactly what made click-to-dismiss silently die after the notch
+    /// was closed and reopened (no view change re-armed it).
+    private var browserClickMonitor: Any?
+
+    /// Block-based AudioTap observers, kept with their center so they can be removed by token
     private var audioTapObserverTokens: [(center: NotificationCenter, token: NSObjectProtocol)] = []
 //    let calendarManager = CalendarManager.shared
 //    let webcamManager = WebcamManager.shared
@@ -713,6 +721,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             deliverImmediately: true
         )
 
+        // Click-to-dismiss for the browser tab: one global monitor for the
+        // whole app lifetime. Global monitors only observe clicks landing in
+        // OTHER apps' windows, so the notch's own panels can never trigger
+        // it; everything else is checked at click time below.
+        browserClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                // Resolve the notch's view model for whichever screen is
+                // active (single-window path uses `window`; multi-display
+                // uses viewModels[screen]).
+                let activeVM: DynamicIslandViewModel? = self.window != nil
+                    ? self.vm
+                    : self.viewModels.values.first
+                guard let vm = activeVM,
+                      vm.notchState == .open,
+                      self.coordinator.currentView == .browser,
+                      !WebTabsModelHolder.shared.model.isCinemaMode else { return }
+                vm.close()
+            }
+        }
+
         LockScreenLiveActivityWindowManager.shared.configure(viewModel: vm)
         LockScreenManager.shared.configure(viewModel: vm)
         extensionXPCServiceHost.start()
@@ -1106,12 +1135,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: workItem)
             case .open:
-                // Pinned browser tabs are exempt from the toggle shortcut's
-                // close; the pin is an explicit user promise to keep the
-                // panel up. Unpinning restores normal toggle behavior.
+                // Cinema Mode is exempt from the toggle shortcut's close;
+                // turning it on is an explicit user promise to keep the
+                // panel up. Toggling it off restores normal behavior.
                 if viewModel.notchState == .open,
                    coordinator.currentView == .browser,
-                   WebTabsModelHolder.shared.model.isPinned {
+                   WebTabsModelHolder.shared.model.isCinemaMode {
                     closeNotchWorkItem?.cancel()
                     closeNotchWorkItem = nil
                 } else {
@@ -1748,7 +1777,6 @@ extension Notification.Name {
     static let notchHeightChanged = Notification.Name("NotchHeightChanged")
     static let showOnAllDisplaysChanged = Notification.Name("showOnAllDisplaysChanged")
     static let automaticallySwitchDisplayChanged = Notification.Name("automaticallySwitchDisplayChanged")
-    static let browserAutoCloseRearmRequested = Notification.Name("BrowserAutoCloseRearmRequested")
 }
 
 extension CGRect: @retroactive Hashable {

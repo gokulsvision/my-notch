@@ -483,7 +483,6 @@ private enum SettingsSearchIndex {
         SettingsSearchEntry(tab: .browser, title: "Enable browser", keywords: ["browser", "webkit", "web", "tab"], highlightID: SettingsTab.browser.highlightID(for: "Enable browser")),
         SettingsSearchEntry(tab: .browser, title: "Search engine", keywords: ["browser", "search", "engine", "duckduckgo", "google"], highlightID: SettingsTab.browser.highlightID(for: "Search engine")),
         SettingsSearchEntry(tab: .browser, title: "Notch size", keywords: ["browser", "size", "height", "notch", "video", "youtube"], highlightID: SettingsTab.browser.highlightID(for: "Notch size")),
-        SettingsSearchEntry(tab: .browser, title: "Close after pointer leaves", keywords: ["browser", "auto", "close", "delay", "collapse", "hover"], highlightID: SettingsTab.browser.highlightID(for: "Close after pointer leaves")),
         SettingsSearchEntry(tab: .browser, title: "Always use dark mode", keywords: ["browser", "dark", "mode", "theme", "night", "force"], highlightID: SettingsTab.browser.highlightID(for: "Always use dark mode")),
         SettingsSearchEntry(tab: .terminal, title: "Bold as bright", keywords: ["terminal", "bold", "bright", "colors"], highlightID: SettingsTab.terminal.highlightID(for: "Bold as bright")),
         SettingsSearchEntry(tab: .terminal, title: "Cursor style", keywords: ["terminal", "cursor", "block", "underline", "bar", "blink"], highlightID: SettingsTab.terminal.highlightID(for: "Cursor style")),
@@ -9682,18 +9681,10 @@ struct BrowserSettings: View {
     @Default(.enableBrowserFeature) var enableBrowserFeature
     @Default(.browserSearchEngine) var browserSearchEngine
     @Default(.browserPanelSize) var browserPanelSize
-    @Default(.browserAutoCloseDelay) var browserAutoCloseDelay
 
     /// "Never" is stored as −1; the auto-close scheduler treats ≤ 0 as off.
     private var browserSize: Binding<BrowserSizePreset> {
         Binding(get: { browserPanelSize }, set: { browserPanelSize = $0 })
-    }
-
-    private var autoCloseDelay: Binding<Double> {
-        Binding(
-            get: { browserAutoCloseDelay },
-            set: { browserAutoCloseDelay = $0 }
-        )
     }
 
     private func highlightID(_ title: String) -> String {
@@ -9722,15 +9713,6 @@ struct BrowserSettings: View {
                         }
                     }
                     .settingsHighlight(id: highlightID("Notch size"))
-
-                    Picker("Close after pointer leaves", selection: autoCloseDelay) {
-                        Text("Immediately").tag(0.0)
-                        Text("5 seconds").tag(5.0)
-                        Text("15 seconds").tag(15.0)
-                        Text("30 seconds").tag(30.0)
-                        Text("Never").tag(-1.0)
-                    }
-                    .settingsHighlight(id: highlightID("Close after pointer leaves"))
 
                     Defaults.Toggle(key: .browserForceDarkMode) {
                         VStack(alignment: .leading, spacing: 2) {

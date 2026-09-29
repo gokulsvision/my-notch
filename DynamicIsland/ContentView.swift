@@ -259,7 +259,6 @@ struct ContentView: View {
     
 
     @State private var hoverTask: Task<Void, Never>?
-    @State private var browserAutoCloseTask: Task<Void, Never>?
     @State private var isHovering: Bool = false
     @State private var lastHapticTime: Date = Date()
     @State private var hoverClickMonitor: Any?
@@ -917,9 +916,6 @@ struct ContentView: View {
             }
             .onChange(of: terminalStickyMode) { _, _ in
                 syncStickyTerminalOutsideClickMonitor()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .browserAutoCloseRearmRequested)) { _ in
-                handleBrowserAutoCloseRearmRequest()
             }
             .onChange(of: vm.notchState) { _, state in
                 if state == .open {
@@ -2204,7 +2200,12 @@ struct ContentView: View {
                     if !stillInside {
                         self.hoverTask?.cancel()
                         self.stopHoverClickMonitor()
-                        self.finishHoverExit()
+                        // Route through handleHover so the browser auto-close
+                        // timer is armed exactly like a real hover-exit —
+                        // borderless panels often swallow onHover(false), and
+                        // finishing the exit without arming the timer meant
+                        // the browser panel stayed open indefinitely.
+                        self.handleHover(false)
                     }
                 }
 
@@ -2304,9 +2305,9 @@ struct ContentView: View {
         stickyTerminalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { [weak vm] _ in
             Task { @MainActor in
                 guard let vm, vm.notchState == .open else { return }
-                // A pinned browser must survive outside clicks; the monitor
+                // Cinema Mode must survive outside clicks; the monitor
                 // is terminal-only but guard against any later install.
-                if coordinator.currentView == .browser && WebTabsModelHolder.shared.model.isPinned {
+                if coordinator.currentView == .browser && WebTabsModelHolder.shared.model.isCinemaMode {
                     return
                 }
                 let clickLocation = NSEvent.mouseLocation
@@ -2341,7 +2342,6 @@ struct ContentView: View {
                 startHoverClickMonitor()
             }
             removeStickyTerminalClickMonitor()
-            cancelBrowserAutoClose()
         } else {
             stopHoverClickMonitor()
             if isHoveringClosedMusicWaveformControl {
@@ -2349,7 +2349,6 @@ struct ContentView: View {
                     isHoveringClosedMusicWaveformControl = false
                 }
             }
-            scheduleBrowserAutoClose()
         }
 
         if hovering {
@@ -2421,47 +2420,6 @@ struct ContentView: View {
         }
     }
 
-    /// Schedules the notch to close after `browserAutoCloseDelay` seconds of
-    /// no pointer contact while the Browser tab is active. Re-hovering the
-    /// notch cancels the pending close, so it feels natural rather than
-    /// snatching the panel away mid-read. Pinned browsers are never closed
-    /// by the timer.
-    private func scheduleBrowserAutoClose() {
-        browserAutoCloseTask?.cancel()
-        let delay = Defaults[.browserAutoCloseDelay]
-        let model = WebTabsModelHolder.shared.model
-        guard model.isPinned == false,
-              delay > 0,
-              vm.notchState == .open,
-              coordinator.currentView == .browser else { return }
-        browserAutoCloseTask = Task {
-            try? await Task.sleep(for: .seconds(delay))
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                guard self.vm.notchState == .open,
-                      self.coordinator.currentView == .browser,
-                      !WebTabsModelHolder.shared.model.isPinned,
-                      !self.isPointInsideNotchWindow(NSEvent.mouseLocation),
-                      !self.shouldPreventAutoClose() else { return }
-                self.vm.close()
-            }
-        }
-    }
-
-    private func cancelBrowserAutoClose() {
-        browserAutoCloseTask?.cancel()
-        browserAutoCloseTask = nil
-    }
-
-    /// Fired when the user unpins the browser while the cursor is away:
-    /// re-arms the standard auto-close countdown so the panel tucks in again.
-    private func handleBrowserAutoCloseRearmRequest() {
-        guard vm.notchState == .open,
-              coordinator.currentView == .browser,
-              !WebTabsModelHolder.shared.model.isPinned else { return }
-        scheduleBrowserAutoClose()
-    }
-
     private func shouldRetainHoverAtScreenTopEdge(_ location: NSPoint = NSEvent.mouseLocation) -> Bool {
         guard let screen = NSScreen.screens.first(where: { $0.localizedName == currentScreenName }) else {
             return false
@@ -2499,16 +2457,38 @@ struct ContentView: View {
     }
 
     private func isPointInsideNotchWindow(_ point: CGPoint = NSEvent.mouseLocation) -> Bool {
+        // Visible content only: the NSWindow frame is ~30pt taller than the
+        // rendered panel (12pt open padding + 18pt shadow band), so a cursor
+        // parked just below the panel still counts as "inside" if the raw
+        // frame is used — silently aborting the browser auto-close timer
+        // ("only closes when the mouse is well below the panel").
         if let appDelegate = AppDelegate.shared {
             if Defaults[.showOnAllDisplays] {
-                return appDelegate.windows.values.contains(where: { frameContainsPointIncludingTopEdge($0.frame, point) })
+                return appDelegate.windows.values.contains(where: { frameContainsVisibleNotchPoint($0.frame, point) })
             }
             if let window = appDelegate.window {
-                return frameContainsPointIncludingTopEdge(window.frame, point)
+                return frameContainsVisibleNotchPoint(window.frame, point)
             }
         }
 
-        return NSApp.windows.contains(where: { frameContainsPointIncludingTopEdge($0.frame, point) })
+        return NSApp.windows.contains(where: { frameContainsVisibleNotchPoint($0.frame, point) })
+    }
+
+    /// Point-in-frame test trimmed to the panel's visible bounds: keeps the
+    /// full width, but excludes the bottom band the window reserves for the
+    /// notch's drop shadow and open-state padding. The top edge stays
+    /// inclusive (the panel bleeds into the screen's top bezel).
+    private func frameContainsVisibleNotchPoint(_ frame: CGRect, _ point: CGPoint) -> Bool {
+        let bottomTrim = vm.notchState == .open
+            ? (notchBottomPadding + (isIslandMode ? dynamicIslandShadowInset : 0))
+            : notchShadowPaddingValue(isMinimalistic: enableMinimalisticUI)
+        let trimmed = CGRect(
+            x: frame.minX,
+            y: frame.minY + bottomTrim,
+            width: frame.width,
+            height: max(0, frame.height - bottomTrim)
+        )
+        return frameContainsPointIncludingTopEdge(trimmed, point)
     }
 
     /// `CGRect.contains` is half-open on max edges; the top pixel needs inclusive maxY.
@@ -2542,14 +2522,11 @@ struct ContentView: View {
     }
 
     private func shouldPreventAutoClose() -> Bool {
-        // The Browser tab is exempt from the instant hover-out close: when
-        // pinned it never closes, otherwise it closes via the configurable
-        // auto-close timer armed in scheduleBrowserAutoClose.
+        // The browser owns its close lifecycle: it dismisses on outside
+        // clicks (AppDelegate.installBrowserClickMonitor) or stays up in
+        // Cinema Mode — never via the hover-out close.
         if coordinator.currentView == .browser {
-            let model = WebTabsModelHolder.shared.model
-            if model.isPinned || Defaults[.browserAutoCloseDelay] > 0 {
-                return true
-            }
+            return true
         }
         // Dragging a shelf item out necessarily takes the cursor off the notch.
         // Without this, the hover-exit timer closes the panel mid-drag, tearing
@@ -2704,10 +2681,10 @@ struct ContentView: View {
     private func handleCloseScrollGesture(translation: CGFloat, phase: NSEvent.Phase) {
         guard vm.notchState == .open, !vm.isHoveringCalendar, !vm.isScrollGestureActive else { return }
 
-        // The browser owns its close lifecycle: pinned never closes, and
-        // unpinned uses the configurable auto-close timer. Scrolling a page
-        // must never read as a close swipe.
-        if coordinator.currentView == .browser && (WebTabsModelHolder.shared.model.isPinned || Defaults[.browserAutoCloseDelay] != 0) {
+        // The browser owns its close lifecycle: it dismisses on outside
+        // clicks, never via the scroll-close gesture. Scrolling a page must
+        // never read as a close swipe.
+        if coordinator.currentView == .browser {
             return
         }
 

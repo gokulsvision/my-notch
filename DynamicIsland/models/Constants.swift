@@ -1322,9 +1322,6 @@ extension Defaults.Keys {
     /// YouTube's player. XL is the default so the browser is usable out of
     /// the box; users shrink it for quick lookups.
     static let browserPanelSize = Key<BrowserSizePreset>("browserSizePreset", default: .extraLarge)
-    /// Seconds the notch stays open after the pointer leaves while the
-    /// Browser tab is active. Zero closes with the standard quick hover-out.
-    static let browserAutoCloseDelay = Key<Double>("browserAutoCloseDelay", default: 5)
     /// Forces dark rendering on every site: the web view's appearance is
     /// pinned to darkAqua so `prefers-color-scheme: dark` always matches.
     static let browserForceDarkMode = Key<Bool>("browserForceDarkMode", default: true)

@@ -35,9 +35,9 @@ final class WebTabsModel: ObservableObject {
             syncActiveTabPublishers()
         }
     }
-    /// When pinned, the browser never auto-closes on hover-out, regardless
-    /// of the configured delay. Unpinning resumes the normal timer.
-    @Published var isPinned = false
+    /// When on (Cinema Mode), outside clicks never dismiss the browser;
+    /// the panel stays up until the toggle is switched off.
+    @Published var isCinemaMode = false
     /// Exact panel height set by dragging the bottom bezel. When set, it
     /// overrides the S/M/L/XL preset until the user picks a preset again.
     @Published var customHeight: CGFloat?

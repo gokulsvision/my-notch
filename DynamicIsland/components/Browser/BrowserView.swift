@@ -155,7 +155,7 @@ struct BrowserView: View {
                             addressFocused = true
                         }
                         sizeControls
-                        pinButton
+                        cinemaModeButton
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -224,7 +224,7 @@ struct BrowserView: View {
             .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Zoom, size & pin controls
+    // MARK: - Zoom, size & cinema controls
 
     /// Explicit zoom out / in pair plus the fit toggle — one button each,
     /// always visible, no symbol-ambiguity.
@@ -299,35 +299,24 @@ struct BrowserView: View {
         }
     }
 
-    /// Pin: keeps the notch open indefinitely (no auto-close on hover-out)
-    /// until unpinned. Highlighted while pinned. Unpinning while the cursor
-    /// is away re-arms the standard auto-close timer, so the panel tucks in
-    /// on its own again.
-    private var pinButton: some View {
+    /// Cinema Mode: keeps the notch open until toggled off — outside clicks
+    /// don't dismiss it. Highlighted while on.
+    private var cinemaModeButton: some View {
         Button {
-            webTabs.isPinned.toggle()
-            if !webTabs.isPinned {
-                let screenFrame = NSScreen.main?.frame ?? .zero
-                let mouse = NSEvent.mouseLocation
-                let overNotch = screenFrame.maxY - mouse.y < 40
-                    && abs(mouse.x - screenFrame.midX) < 400
-                if !overNotch {
-                    vm.scheduleBrowserAutoCloseAfterUnpin()
-                }
-            }
+            webTabs.isCinemaMode.toggle()
         } label: {
-            Image(systemName: webTabs.isPinned ? "pin.fill" : "pin")
+            Image(systemName: webTabs.isCinemaMode ? "film.fill" : "film")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(webTabs.isPinned ? .white : .white.opacity(0.45))
+                .foregroundStyle(webTabs.isCinemaMode ? .white : .white.opacity(0.45))
                 .frame(width: 22, height: 20)
                 .background(
                     RoundedRectangle(cornerRadius: 5)
-                        .fill(webTabs.isPinned ? Color.accentColor.opacity(0.55) : Color.clear)
+                        .fill(webTabs.isCinemaMode ? Color.accentColor.opacity(0.55) : Color.clear)
                 )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(webTabs.isPinned ? "Unpin (resume auto-close)" : "Pin browser open")
+        .help("Cinema mode — keep open until toggled off")
     }
 
     // MARK: - Content

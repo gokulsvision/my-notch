@@ -439,16 +439,6 @@ class DynamicIslandViewModel: NSObject, ObservableObject {
         notchSize = targetSize
     }
 
-    /// Re-arms the browser auto-close countdown after the user unpins while
-    /// the cursor is away from the notch. Delegates to ContentView's timer
-    /// via a notification so there is exactly one owner of the close task.
-    func scheduleBrowserAutoCloseAfterUnpin() {
-        NotificationCenter.default.post(
-            name: .browserAutoCloseRearmRequested,
-            object: nil
-        )
-    }
-
     private func calculateDynamicNotchSize() -> CGSize {
         let baseSize = Defaults[.enableMinimalisticUI] ? minimalisticOpenNotchSize(isDynamicIslandMode: shouldUseDynamicIslandMode(for: screen)) : openNotchSize
         var adjustedSize = baseSize
