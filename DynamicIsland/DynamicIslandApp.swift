@@ -724,21 +724,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Click-to-dismiss for the browser tab: one global monitor for the
         // whole app lifetime. Global monitors only observe clicks landing in
         // OTHER apps' windows, so the notch's own panels can never trigger
-        // it; everything else is checked at click time below.
+        // it; everything else is checked at click time below, cheapest
+        // flags first so the overwhelmingly common click pays two bool reads.
         browserClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
-                // Resolve the notch's view model for whichever screen is
-                // active (single-window path uses `window`; multi-display
-                // uses viewModels[screen]).
-                let activeVM: DynamicIslandViewModel? = self.window != nil
-                    ? self.vm
-                    : self.viewModels.values.first
-                guard let vm = activeVM,
-                      vm.notchState == .open,
-                      self.coordinator.currentView == .browser,
-                      !WebTabsModelHolder.shared.model.isCinemaMode else { return }
-                vm.close()
+                // Cheap coordinator/model flags first; skip window geometry
+                // for the vast majority of clicks.
+                guard self.coordinator.currentView == .browser,
+                      !WebTabsModelHolder.shared.model.isCinemaMode,
+                      self.vm.notchState == .open else { return }
+                // Every screen's notch mirrors coordinator.currentView while
+                // open, so closing each open instance dismisses the browser
+                // on the screen the user is actually looking at.
+                for case let vm as DynamicIslandViewModel in self.viewModels.values where vm.notchState == .open {
+                    vm.close()
+                }
+                if self.window != nil, self.vm.notchState == .open {
+                    self.vm.close()
+                }
             }
         }
 

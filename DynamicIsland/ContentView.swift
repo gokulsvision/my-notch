@@ -2200,11 +2200,11 @@ struct ContentView: View {
                     if !stillInside {
                         self.hoverTask?.cancel()
                         self.stopHoverClickMonitor()
-                        // Route through handleHover so the browser auto-close
-                        // timer is armed exactly like a real hover-exit —
-                        // borderless panels often swallow onHover(false), and
-                        // finishing the exit without arming the timer meant
-                        // the browser panel stayed open indefinitely.
+                        // Route through handleHover(false) instead of
+                        // finishHoverExit: handleHover performs the identical
+                        // close work but also re-syncs the terminal outside-
+                        // click monitor, so its state can't drift from the
+                        // real hover-exit path.
                         self.handleHover(false)
                     }
                 }
@@ -2460,7 +2460,7 @@ struct ContentView: View {
         // Visible content only: the NSWindow frame is ~30pt taller than the
         // rendered panel (12pt open padding + 18pt shadow band), so a cursor
         // parked just below the panel still counts as "inside" if the raw
-        // frame is used — silently aborting the browser auto-close timer
+        // frame is used — keeping the hover-exit polling from ever firing
         // ("only closes when the mouse is well below the panel").
         if let appDelegate = AppDelegate.shared {
             if Defaults[.showOnAllDisplays] {

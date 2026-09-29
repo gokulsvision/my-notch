@@ -116,7 +116,7 @@ final class WebTabsModel: ObservableObject {
         guard tabs.indices.contains(index), index != activeTabIndex else { return }
         activeTabIndex = index
         let tab = tabs[index]
-        tab.ensureWebView(forceDark: forceDarkMode)
+        _ = tab.ensureWebView(forceDark: forceDarkMode)
         addressText = tab.webView?.url.map(Self.displayURL) ?? tab.pendingURL.map(Self.displayURL) ?? ""
         activeURL = tab.webView?.url ?? tab.pendingURL
     }
