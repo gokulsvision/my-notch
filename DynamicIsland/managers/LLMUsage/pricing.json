@@ -141,6 +141,16 @@
       }
     },
     {
+      "id": "anthropic/claude-sonnet-5.5",
+      "name": "Anthropic: Claude Sonnet 5.5",
+      "pricing": {
+        "prompt": "0.000002",
+        "completion": "0.00001",
+        "cache_read": "0.0000002",
+        "cache_write": "0.0000025"
+      }
+    },
+    {
       "id": "google/gemini-2.5-flash",
       "name": "Google: Gemini 2.5 Flash",
       "pricing": {
@@ -744,10 +754,10 @@
       "id": "openai/gpt-5.6-sol-pro",
       "name": "OpenAI: GPT-5.6 Sol Pro",
       "pricing": {
-        "prompt": "0.000002",
-        "completion": "0.00001",
-        "cache_read": "0.0000002",
-        "cache_write": "0.0000025"
+        "prompt": "0.000004",
+        "completion": "0.00002",
+        "cache_read": "0.0000004",
+        "cache_write": "0.000005"
       }
     },
     {
@@ -831,6 +841,26 @@
       }
     },
     {
+      "id": "openai/gpt-6.1-sol",
+      "name": "OpenAI: GPT-6.1 Sol",
+      "pricing": {
+        "prompt": "0.000002",
+        "completion": "0.00001",
+        "cache_read": "0.0000001",
+        "cache_write": "0.0000025"
+      }
+    },
+    {
+      "id": "openai/gpt-6.1-sol-pro",
+      "name": "OpenAI: GPT-6.1 Sol Pro",
+      "pricing": {
+        "prompt": "0.000002",
+        "completion": "0.00001",
+        "cache_read": "0.0000001",
+        "cache_write": "0.0000025"
+      }
+    },
+    {
       "id": "openai/gpt-audio",
       "name": "OpenAI: GPT Audio",
       "pricing": {
@@ -864,9 +894,9 @@
       "id": "openai/gpt-oss-120b",
       "name": "OpenAI: gpt-oss-120b",
       "pricing": {
-        "prompt": "0.00000015",
-        "completion": "0.0000006",
-        "cache_read": "0.000000075",
+        "prompt": "0.000000037",
+        "completion": "0.00000017",
+        "cache_read": "",
         "cache_write": ""
       }
     },
@@ -876,7 +906,7 @@
       "pricing": {
         "prompt": "0.000000018",
         "completion": "0.00000009",
-        "cache_read": "",
+        "cache_read": "0.000000009",
         "cache_write": ""
       }
     },
@@ -951,5 +981,5 @@
       }
     }
   ],
-  "last_updated": "2026-09-28T00:08:01Z"
+  "last_updated": "2026-09-30T00:07:28Z"
 }
