@@ -9723,6 +9723,11 @@ struct BrowserSettings: View {
                         }
                     }
                     .settingsHighlight(id: highlightID("Always use dark mode"))
+
+                    Button("Reset website permissions") {
+                        BrowserPermissions.shared.resetAll()
+                    }
+                    .settingsHighlight(id: highlightID("Reset website permissions"))
                 }
             } header: {
                 Text("General")

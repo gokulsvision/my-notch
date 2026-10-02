@@ -68,6 +68,7 @@ final class WebTabsModel: ObservableObject {
             recycled.webView = nil
             recycled.pendingURL = url
             recycled.hasStartedLoading = url == nil
+            recycled.tabsModel = self
             if activate { activeTabIndex = candidate }
             if activate, let url {
                 recycled.load(url: url)
@@ -78,6 +79,7 @@ final class WebTabsModel: ObservableObject {
         }
 
         let tab = WebTab(initialURL: url)
+        tab.tabsModel = self
         tabs.append(tab)
         if activate {
             activeTabIndex = tabs.count - 1
@@ -179,6 +181,7 @@ final class WebTabsModel: ObservableObject {
                 tabs.append(WebTab(initialURL: url))
             }
             for tab in tabs {
+                tab.tabsModel = self
                 observeTab(tab)
             }
             if tabs.isEmpty {
